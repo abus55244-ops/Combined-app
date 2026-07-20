@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5"/>
+<title>Heritage Unified — একীভূত প্ল্যাটফর্ম</title>
+<link rel="manifest" href="manifest.json"/>
+<meta name="theme-color" content="#5344b5"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="Heritage Unified"/>
+<meta name="application-name" content="Heritage Unified"/>
+<meta name="msapplication-TileColor" content="#5344b5"/>
+<meta name="msapplication-TileImage" content="icons/icon-144.png"/>
+<link rel="icon" href="icons/icon-192.png"/>
+<link rel="apple-touch-icon" href="icons/icon-192.png"/>
+<link rel="apple-touch-icon" sizes="152x152" href="icons/icon-152.png"/>
+<link rel="apple-touch-icon" sizes="192x192" href="icons/icon-192.png"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Amiri:wght@700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18.2.0/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:'Hind Siliguri','Segoe UI',sans-serif}
+body{background:#f4f2ec;min-height:100vh;color:#20242a}
+button{font-family:inherit;cursor:pointer}
+input,select{font-family:inherit}
+::selection{background:#5344b533}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+/* ══════════════════════════════════════════════════════════════
+   PWA: সার্ভিস ওয়ার্কার রেজিস্ট্রেশন
+   ══════════════════════════════════════════════════════════════ */
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("service-worker.js").catch(e=>console.error("SW register failed:", e));
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════
+   ⚠️ কনফিগারেশন — এখানে আপনার বাস্তব তথ্য বসান
+   ══════════════════════════════════════════════════════════════ */
+const CONFIG = {
+  // পুরনো দুই অ্যাপ যেখানে হোস্ট করা আছে সেই URL — TODO: বাস্তব লিংক বসান
+  HOSTEL_APP_URL: "https://REPLACE-WITH-HOSTEL-APP-URL",
+  HAIS_APP_URL: "https://REPLACE-WITH-HAIS-APP-URL",
+};
+
+const HOSTEL_FIREBASE = {
+  apiKey: "AIzaSyD-PLACEHOLDER-HOSTEL-KEY", // TODO: হোস্টেল প্রজেক্টের আসল apiKey বসান
+  databaseURL: "https://heritage-hostel-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "heritage-hostel",
+};
+const HAIS_FIREBASE = {
+  apiKey: "AIzaSyAfSu5ihLHmJNtwQkDJV28sicPRnUFGw70",
+  authDomain: "abu-sayed-6c6b9.firebaseapp.com",
+  databaseURL: "https://abu-sayed-6c6b9-default-rtdb.firebaseio.com",
+  projectId: "abu-sayed-6c6b9",
+};
+
+const hostelApp = firebase.initializeApp(HOSTEL_FIREBASE, "hostelApp");
+const haisApp = firebase.initializeApp(HAIS_FIREBASE); // ডিফল্ট অ্যাপ — auth এখান থেকেই
+const hostelDb = hostelApp.database();
+const haisDb = haisApp.database();
+const auth = haisApp.auth();
+
+// ── বেসলাইন ছাত্র রোস্টার (দুই অ্যাপেই হার্ডকোড করা, অভিন্ন) ──
+const DEFAULT_STUDENTS = {
+  IV: ["ARHAM RAFIN"],
+  V: ["MD.MURSALIN SHEIKH","ABDULLAH AL TAMIM","ALIF ISLAM","ARIFUL PRAMANIK","ASIBUL ISLAM LIHAD CHOWDURY","HABIBUR RAHMAN BEPARI","HUJAIFA BIN SALMAN","SOHAN KHAN","TAWHID MAHTAB"],
+  VI: ["MIR TANZIBUL ISLAM","HASNAT IMTIAZ TASHIN","MUBASHIR RAHMAN NAFIJ SIKDER","MD. AL AMIN","IFAT UDDIN","MD. SALMAN ALI KHAN","ROOZBEH ZAIN","TANJIM ISLAM TAMIM","ABU BOKKOR SHEIKH","AL MUBASSIR MUNSHI","BAYEJID SHEIKH","UDVAB DAS ARNOB","MD SOHANUR RAHMAN SIYAM","ABIR KHAN"],
+  VII: ["SHAMSUL ALAM JOBAYER","SAKIBUL HASAN","MAHIDUL BISWAS","JISAN","MD NAZMUL SAKIB","ANTOR KUMAR GHOSH","MUBASSHIR IMAN","HOSSAIN FIROZ","AL RAFI","MD.ABDULLAH SHEIKH","MESBAH UDDIN KHOLIFA","APON SUTRODHAR","MD SIYAM MOLLA"],
+  VIII: ["MD WALIDUJJAMAN SOHAN","RAKIBUL MUNSHI","SYED MD TANZIM HUDA","RAJBE NUR ISLAM","SAIFULLAH SADAT JARRAH","SALAMA SABIT","ZIHAD AHMED SHARON","MD. MOSHIUR RAHMAN","MD MEZBAUL ISLAM","SHAH MUHAMMAD MAHI","ENAMUL HAQUE SIFAT","KAZI FAYEKUZZAMAN","MD.TAYEB HASAN MUSA","MD.ALIF RAHMAN","MD. REZWAN AHMED","MD ARAF SARDER","TAMIM KAZI","SHAHRIAR MAHMUD","HAMIDUR RAHMAN","SIMRAN HOSSAIN RIHAD","MD FARHAN RAHMAN AVI","ARAFAT MIA"],
+  IX: ["ABUL HAYAT","SAHADAT BEPARY","MD ABDULLAH BIN RAJ","RIYAN KHAN","MD.ADOL","NAZMUS SAKIB","AMIR HAMJA GIHAD","MASHFIN MAHIN","MD.SAMIR KHAN","ABIR BISWAS","BISHWJIT BISWAS TIRTHO","FAHAD HOSSEN","MD.AHSANUL ISLAM MAHIM","RAFIUL ISLAM AYAN","SHAJID KHAN MAHIN","KHANDOKER FARHAN","RAFIUL BAIZED","MD SIZAN SHEIKH","MD ABDULLAH"],
+  X: ["MD. FAHIM FOKIR","MD. SIAM MONDOL","MD. SHAWON MONDOL","MD. TAHSIN ZAMAN","SAFWAN BIN SATTAR","SHAFAYET BIN JABBAR","ARHAM HASAN AKASH","SHAHRIAR NAFIZ SIFAT","ABDULLAH MOMIN","MD SHAD REZA","SOHEL MRIDHA","MD. SHOHIDUL ISLAM","MITUL BHUIYA","ABDULLAH BIN MUKHTER","MUNNA KHA","SABID ISLAM","MD. ALAMIN MRIDHA","SHAHRIYA MATUBBER","ADNAN HOSSEN ALIF","MUHTAMIM KABIR","S M RAHMAT ULLAH","AL HOSSAIN","MD OMOR FARUK TALHA","TAWHID ISLAM"],
+};
+const CLASS_BN = {IV:'চতুর্থ',V:'পঞ্চম',VI:'ষষ্ঠ',VII:'সপ্তম',VIII:'অষ্টম',IX:'নবম',X:'দশম'};
+
+function normalizeName(name){
+  return (name||"").toString().trim().toUpperCase()
+    .replace(/\./g,"").replace(/\s+/g," ");
+}
+function emailKey(email){
+  return (email||"").trim().toLowerCase().replace(/\./g,"_").replace(/@/g,"__at__");
+}
+
+const { useState, useEffect, useMemo } = React;
+const C = { pu:"#5344b5", puL:"#ede9fd", gold:"#a9822f", goldL:"#f7f0dd",
+            gr:"#2f9e5c", grL:"#e9f6ee", re:"#a32d2d", reL:"#fbebeb",
+            mu:"#6b6b8a", bd:"rgba(0,0,0,0.1)", tx:"#20242a" };
+
+function Card({children, style={}}){
+  return React.createElement("div",{style:{background:"#fff",border:`1px solid ${C.bd}`,
+    borderRadius:14,padding:16,marginBottom:12,...style}}, children);
+}
+
+/* ══════════ PWA ইনস্টল প্রম্পট ══════════ */
+function useInstallPrompt(){
+  const [deferred,setDeferred]=useState(null);
+  const [installed,setInstalled]=useState(
+    window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone===true);
+  useEffect(()=>{
+    const onPrompt=(e)=>{ e.preventDefault(); setDeferred(e); };
+    const onInstalled=()=>setInstalled(true);
+    window.addEventListener("beforeinstallprompt",onPrompt);
+    window.addEventListener("appinstalled",onInstalled);
+    return ()=>{ window.removeEventListener("beforeinstallprompt",onPrompt);
+      window.removeEventListener("appinstalled",onInstalled); };
+  },[]);
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+  const promptInstall = async ()=>{
+    if(!deferred) return;
+    deferred.prompt();
+    await deferred.userChoice;
+    setDeferred(null);
+  };
+  return { installed, isIOS, canPromptNative: !!deferred, promptInstall };
+}
+
+function InstallBanner(){
+  const {installed,isIOS,canPromptNative,promptInstall} = useInstallPrompt();
+  const [dismissed,setDismissed]=useState(false);
+  if(installed || dismissed) return null;
+  if(!canPromptNative && !isIOS) return null;
+  return React.createElement("div",{style:{background:C.puL,border:`1px solid ${C.pu}30`,
+    borderRadius:12,padding:"10px 14px",margin:"0 0 12px",display:"flex",justifyContent:"space-between",
+    alignItems:"center",gap:10,flexWrap:"wrap"}},
+    React.createElement("div",{style:{fontSize:11.5,color:C.pu,flex:1,minWidth:180}},
+      canPromptNative
+        ? "📲 এই অ্যাপটি ফোনে ইনস্টল করে নিন — হোমস্ক্রিন থেকে সরাসরি খুলতে পারবেন।"
+        : "📲 ইনস্টল করতে: Safari-র শেয়ার (⬆️) বাটনে চেপে 'Add to Home Screen' বেছে নিন।"),
+    canPromptNative && React.createElement("button",{onClick:promptInstall,
+      style:{padding:"7px 14px",borderRadius:8,border:"none",background:C.pu,color:"#fff",
+        fontWeight:700,fontSize:12,flexShrink:0}}, "ইনস্টল করুন"),
+    React.createElement("button",{onClick:()=>setDismissed(true),
+      style:{border:"none",background:"transparent",color:C.mu,fontSize:16,flexShrink:0,
+        lineHeight:1,padding:"0 4px"}}, "✕"));
+}
+
+/* ══════════ লগইন স্ক্রিন ══════════ */
+function LoginScreen({onLogin}){
+  const [email,setEmail]=useState(""), [pass,setPass]=useState("");
+  const [err,setErr]=useState(""), [busy,setBusy]=useState(false);
+
+  const submit = async ()=>{
+    if(!email.trim()||!pass){ setErr("ইমেইল ও পাসওয়ার্ড দিন"); return; }
+    setBusy(true); setErr("");
+    try{
+      const cred = await auth.signInWithEmailAndPassword(email.trim(), pass);
+      onLogin(cred.user);
+    }catch(e){
+      setErr("❌ ইমেইল বা পাসওয়ার্ড ভুল, অথবা আপনার এখনো এই একীভূত সিস্টেমে অ্যাকাউন্ট নেই।");
+    }
+    setBusy(false);
+  };
+
+  return React.createElement("div",{style:{minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",
+    justifyContent:"center",padding:20,
+    background:"linear-gradient(135deg,#5344b5 0%,#3d3384 55%,#1f7a63 100%)"}},
+    React.createElement("div",{style:{maxWidth:380,width:"100%"}},
+      React.createElement(InstallBanner,null)),
+    React.createElement("div",{style:{background:"#fff",borderRadius:20,padding:28,maxWidth:380,
+      width:"100%",boxShadow:"0 20px 60px rgba(0,0,0,0.35)"}},
+      React.createElement("div",{style:{textAlign:"center",marginBottom:22}},
+        React.createElement("div",{style:{fontSize:40,marginBottom:6}},"🏫"),
+        React.createElement("div",{style:{fontWeight:800,fontSize:20,color:C.pu}},"Heritage Unified"),
+        React.createElement("div",{style:{fontSize:11,color:C.mu,marginTop:2}},
+          "হোস্টেল ও একাডেমিক — একই প্ল্যাটফর্ম")),
+      React.createElement("div",{style:{fontSize:12,color:C.mu,marginBottom:4,fontWeight:600}},"ইমেইল"),
+      React.createElement("input",{type:"email",value:email,onChange:e=>setEmail(e.target.value),
+        placeholder:"আপনার ইমেইল...",
+        style:{width:"100%",padding:"10px 12px",border:`2px solid ${C.puL}`,borderRadius:10,
+          fontSize:13,marginBottom:10,outline:"none"}}),
+      React.createElement("div",{style:{fontSize:12,color:C.mu,marginBottom:4,fontWeight:600}},"পাসওয়ার্ড"),
+      React.createElement("input",{type:"password",value:pass,onChange:e=>setPass(e.target.value),
+        placeholder:"পাসওয়ার্ড...",onKeyDown:e=>e.key==="Enter"&&submit(),
+        style:{width:"100%",padding:"10px 12px",border:`2px solid ${C.puL}`,borderRadius:10,
+          fontSize:13,marginBottom:14,outline:"none"}}),
+      err && React.createElement("div",{style:{color:C.re,fontSize:12,marginBottom:10,fontWeight:600}},err),
+      React.createElement("button",{onClick:submit,disabled:busy,
+        style:{width:"100%",padding:"12px",borderRadius:12,border:"none",
+          background:"linear-gradient(135deg,#5344b5,#7c3aed)",color:"#fff",fontWeight:700,
+          fontSize:14,opacity:busy?0.7:1}}, busy?"যাচাই হচ্ছে...":"🔐 লগইন করুন"),
+      React.createElement("div",{style:{fontSize:10.5,color:C.mu,marginTop:14,textAlign:"center",lineHeight:1.6}},
+        "এটি HAIS-এর একই ইমেইল/পাসওয়ার্ড ব্যবহার করে। নতুন অ্যাকাউন্ট বা রোল দরকার হলে অ্যাডমিনের সাথে যোগাযোগ করুন।")));
+}
+
+/* ══════════ রোল না থাকলে দেখানোর স্ক্রিন ══════════ */
+function NoRoleScreen({user, onLogout}){
+  return React.createElement("div",{style:{minHeight:"100vh",display:"flex",alignItems:"center",
+    justifyContent:"center",padding:20}},
+    React.createElement(Card,{style:{maxWidth:380,textAlign:"center"}},
+      React.createElement("div",{style:{fontSize:36,marginBottom:10}},"🔒"),
+      React.createElement("div",{style:{fontWeight:700,fontSize:15,marginBottom:8}},
+        "এই ইমেইলের জন্য এখনো কোনো রোল নির্ধারণ করা হয়নি"),
+      React.createElement("div",{style:{fontSize:12,color:C.mu,marginBottom:16}},
+        user.email, " — অ্যাডমিনকে বলুন এই ইমেইলে হোস্টেল/একাডেমিক/অ্যাডমিন অ্যাক্সেস দিতে।"),
+      React.createElement("button",{onClick:onLogout,
+        style:{padding:"9px 18px",borderRadius:10,border:"none",background:C.puL,color:C.pu,fontWeight:700}},
+        "লগআউট")));
+}
+
+/* ══════════ মূল ড্যাশবোর্ড ══════════ */
+function Dashboard({user, role, onLogout}){
+  const [tab,setTab]=useState("home");
+  return React.createElement("div",null,
+    React.createElement("div",{style:{background:"#fff",borderBottom:`1px solid ${C.bd}`,
+      padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",
+      position:"sticky",top:0,zIndex:10}},
+      React.createElement("div",{style:{fontWeight:800,color:C.pu,fontSize:15}},"🏫 Heritage Unified"),
+      React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10}},
+        React.createElement("span",{style:{fontSize:11,color:C.mu}}, user.email),
+        React.createElement("button",{onClick:onLogout,
+          style:{border:"none",background:C.reL,color:C.re,borderRadius:8,padding:"5px 10px",
+            fontSize:11,fontWeight:700}},"লগআউট"))),
+    React.createElement("div",{style:{display:"flex",gap:6,padding:"10px 16px",flexWrap:"wrap"}},
+      [["home","🏠 হোম"],["students","👨‍🎓 ইউনিফাইড ছাত্র প্রোফাইল"],
+       ...(role.isAdmin?[["roles","🔑 রোল ম্যানেজমেন্ট"]]:[])]
+        .map(([id,label])=>React.createElement("button",{key:id,onClick:()=>setTab(id),
+          style:{padding:"7px 14px",borderRadius:20,border:`1px solid ${tab===id?C.pu:C.bd}`,
+            background:tab===id?C.puL:"transparent",color:tab===id?C.pu:C.mu,
+            fontWeight:tab===id?700:400,fontSize:12}}, label))),
+    React.createElement("div",{style:{padding:"0 16px 40px",maxWidth:720,margin:"0 auto"}},
+      React.createElement(InstallBanner,null),
+      tab==="home" && React.createElement(HomeTab,{role}),
+      tab==="students" && React.createElement(StudentsTab,{role}),
+      tab==="roles" && role.isAdmin && React.createElement(RolesTab,null)));
+}
+
+function HomeTab({role}){
+  return React.createElement("div",null,
+    React.createElement(Card,null,
+      React.createElement("div",{style:{fontWeight:700,fontSize:14,marginBottom:6}},"স্বাগতম"),
+      React.createElement("div",{style:{fontSize:12,color:C.mu,lineHeight:1.7}},
+        "নিচের মডিউলগুলো আপনার রোল অনুযায়ী দেখানো হচ্ছে। প্রতিটি মডিউল প্রথমবার খুললে সেই",
+        " মডিউলের নিজস্ব লগইন একবার দিতে হবে — এরপর ব্রাউজার মনে রাখবে।")),
+    role.canAccessHostel && React.createElement(Card,{style:{background:C.goldL,border:`1px solid ${C.gold}40`}},
+      React.createElement("div",{style:{fontWeight:700,color:C.gold,marginBottom:6}},"🏠 হোস্টেল ম্যানেজমেন্ট"),
+      React.createElement("div",{style:{fontSize:12,color:C.mu,marginBottom:10}},
+        "হাজিরা, ছুটি, আচরণ, স্বাস্থ্য, রুটিন — সবকিছু পূর্বের মতোই।"),
+      React.createElement("a",{href:CONFIG.HOSTEL_APP_URL,target:"_blank",rel:"noopener",
+        style:{display:"inline-block",padding:"9px 16px",borderRadius:10,background:C.gold,
+          color:"#fff",fontWeight:700,fontSize:12,textDecoration:"none"}}, "হোস্টেল মডিউল খুলুন →")),
+    role.canAccessAcademic && React.createElement(Card,{style:{background:C.puL,border:`1px solid ${C.pu}30`}},
+      React.createElement("div",{style:{fontWeight:700,color:C.pu,marginBottom:6}},"📚 একাডেমিক ইন্টেলিজেন্স (HAIS)"),
+      React.createElement("div",{style:{fontSize:12,color:C.mu,marginBottom:10}},
+        "ফলাফল, KPI, লেসন প্ল্যান, পর্যবেক্ষণ — সবকিছু পূর্বের মতোই।"),
+      React.createElement("a",{href:CONFIG.HAIS_APP_URL,target:"_blank",rel:"noopener",
+        style:{display:"inline-block",padding:"9px 16px",borderRadius:10,background:C.pu,
+          color:"#fff",fontWeight:700,fontSize:12,textDecoration:"none"}}, "একাডেমিক মডিউল খুলুন →")),
+    !role.canAccessHostel && !role.canAccessAcademic && React.createElement(Card,null,
+      "আপনার কোনো মডিউলে অ্যাক্সেস নেই — অ্যাডমিনের সাথে যোগাযোগ করুন।"));
+}
+
+/* ══════════ ইউনিফাইড ছাত্র প্রোফাইল ══════════ */
+function StudentsTab({role}){
+  const [hostelRoster,setHostelRoster]=useState(null);
+  const [haisCustom,setHaisCustom]=useState(null);
+  const [haisDept,setHaisDept]=useState({});
+  const [q,setQ]=useState("");
+  const [selected,setSelected]=useState(null);
+  const [err,setErr]=useState("");
+
+  useEffect(()=>{
+    hostelDb.ref("studentRoster").on("value",
+      snap=>setHostelRoster(snap.val()||{}),
+      e=>setErr("হোস্টেল ডেটাবেস পড়া যায়নি — অ্যাক্সেস অনুমতি চেক করুন। ("+e.message+")"));
+    haisDb.ref("hais_data_v3/customStudents").on("value",
+      snap=>setHaisCustom(snap.val()||{}),
+      e=>setErr("HAIS ডেটাবেস পড়া যায়নি — অ্যাক্সেস অনুমতি চেক করুন। ("+e.message+")"));
+    haisDb.ref("hais_data_v3/studentDepartments_v2").on("value", snap=>{
+      const v = snap.val()||{}; const out={};
+      Object.values(v).forEach(x=>{ if(x&&x.name) out[x.name]=x.dept; });
+      setHaisDept(out);
+    });
+    return ()=>{ hostelDb.ref("studentRoster").off(); haisDb.ref("hais_data_v3/customStudents").off();
+      haisDb.ref("hais_data_v3/studentDepartments_v2").off(); };
+  },[]);
+
+  const combined = useMemo(()=>{
+    if(hostelRoster===null || haisCustom===null) return null;
+    const allClasses = new Set([...Object.keys(DEFAULT_STUDENTS),
+      ...Object.keys(hostelRoster), ...Object.keys(haisCustom)]);
+    const rows = [];
+    allClasses.forEach(cls=>{
+      const hostelList = hostelRoster[cls] !== undefined ? hostelRoster[cls] : (DEFAULT_STUDENTS[cls]||[]);
+      const haisList = haisCustom[cls] !== undefined ? haisCustom[cls] : (DEFAULT_STUDENTS[cls]||[]);
+      const names = new Set([...hostelList, ...haisList]);
+      names.forEach(name=>{
+        rows.push({
+          key: normalizeName(name)+"|"+cls,
+          name, cls,
+          inHostel: hostelList.includes(name),
+          inAcademic: haisList.includes(name),
+          dept: haisDept[name]||null,
+        });
+      });
+    });
+    return rows.sort((a,b)=> a.name.localeCompare(b.name));
+  },[hostelRoster,haisCustom,haisDept]);
+
+  const filtered = useMemo(()=>{
+    if(!combined) return [];
+    const query = q.trim().toUpperCase();
+    if(!query) return combined;
+    return combined.filter(r=>r.name.includes(query));
+  },[combined,q]);
+
+  const mismatchCount = combined ? combined.filter(r=>!r.inHostel||!r.inAcademic).length : 0;
+
+  return React.createElement("div",null,
+    React.createElement(Card,null,
+      React.createElement("div",{style:{fontWeight:700,fontSize:14,marginBottom:4}},"👨‍🎓 ইউনিফাইড ছাত্র প্রোফাইল"),
+      React.createElement("div",{style:{fontSize:11.5,color:C.mu,lineHeight:1.6}},
+        "হোস্টেল ও একাডেমিক — দুই ডেটাবেস থেকে লাইভ পড়ে একসাথে দেখানো হচ্ছে। ",
+        "এখানে কোনো ডেটা সংরক্ষিত হয় না, শুধু প্রদর্শিত হয়।")),
+    err && React.createElement(Card,{style:{background:C.reL,color:C.re,fontSize:12}}, err),
+    !combined && !err && React.createElement(Card,null,"লোড হচ্ছে..."),
+    combined && React.createElement("div",null,
+      mismatchCount>0 && React.createElement(Card,{style:{background:"#fff8e1",border:"1px solid #e6cf9e"}},
+        React.createElement("span",{style:{fontWeight:700,color:"#a9822f"}}, "⚠️ "+mismatchCount+" জন ছাত্র "),
+        "শুধু একটি সিস্টেমে আছে — রোস্টার-সিঙ্ক ফাংশন চালু থাকলে শীঘ্রই মিলে যাবে।"),
+      React.createElement("input",{type:"text",value:q,onChange:e=>setQ(e.target.value),
+        placeholder:"নাম দিয়ে খুঁজুন...",
+        style:{width:"100%",padding:"9px 12px",border:`1px solid ${C.bd}`,borderRadius:10,
+          fontSize:13,marginBottom:10}}),
+      React.createElement("div",{style:{fontSize:11,color:C.mu,marginBottom:8}},
+        filtered.length+" জন ছাত্র"),
+      React.createElement("div",null, filtered.slice(0,200).map(r=>
+        React.createElement("div",{key:r.key, onClick:()=>setSelected(r),
+          style:{display:"flex",justifyContent:"space-between",alignItems:"center",
+            padding:"9px 12px",background:"#fff",border:`1px solid ${C.bd}`,borderRadius:10,
+            marginBottom:6,cursor:"pointer"}},
+          React.createElement("div",null,
+            React.createElement("div",{style:{fontWeight:600,fontSize:13}}, r.name),
+            React.createElement("div",{style:{fontSize:10.5,color:C.mu}},
+              "শ্রেণি "+r.cls+(CLASS_BN[r.cls]?" ("+CLASS_BN[r.cls]+")":""))),
+          React.createElement("div",{style:{display:"flex",gap:4}},
+            React.createElement("span",{style:{fontSize:10,fontWeight:700,padding:"2px 7px",
+              borderRadius:10,background:r.inHostel?C.grL:C.reL,color:r.inHostel?C.gr:C.re}},
+              r.inHostel?"🏠 হোস্টেল":"🏠 নেই"),
+            React.createElement("span",{style:{fontSize:10,fontWeight:700,padding:"2px 7px",
+              borderRadius:10,background:r.inAcademic?C.puL:C.reL,color:r.inAcademic?C.pu:C.re}},
+              r.inAcademic?"📚 একাডেমিক":"📚 নেই")))))),
+    selected && React.createElement("div",{style:{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",
+      display:"flex",alignItems:"center",justifyContent:"center",padding:16,zIndex:99},
+      onClick:()=>setSelected(null)},
+      React.createElement("div",{onClick:e=>e.stopPropagation(),
+        style:{background:"#fff",borderRadius:16,padding:20,maxWidth:360,width:"100%"}},
+        React.createElement("div",{style:{fontWeight:800,fontSize:16,color:C.pu,marginBottom:4}},selected.name),
+        React.createElement("div",{style:{fontSize:12,color:C.mu,marginBottom:14}},
+          "শ্রেণি "+selected.cls+(selected.dept?" • বিভাগ: "+selected.dept:"")),
+        React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:8}},
+          selected.inHostel && React.createElement("a",{href:CONFIG.HOSTEL_APP_URL,target:"_blank",rel:"noopener",
+            style:{padding:"10px",borderRadius:10,background:C.goldL,color:C.gold,fontWeight:700,
+              fontSize:12,textDecoration:"none",textAlign:"center"}},
+            "🏠 হোস্টেল অ্যাপে বিস্তারিত দেখুন (নাম সার্চ করুন)"),
+          selected.inAcademic && React.createElement("a",{href:CONFIG.HAIS_APP_URL,target:"_blank",rel:"noopener",
+            style:{padding:"10px",borderRadius:10,background:C.puL,color:C.pu,fontWeight:700,
+              fontSize:12,textDecoration:"none",textAlign:"center"}},
+            "📚 একাডেমিক অ্যাপে বিস্তারিত দেখুন (নাম সার্চ করুন)")),
+        React.createElement("button",{onClick:()=>setSelected(null),
+          style:{width:"100%",marginTop:14,padding:"9px",borderRadius:10,border:`1px solid ${C.bd}`,
+            background:"transparent",color:C.mu,fontWeight:600}}, "বন্ধ করুন"))));
+}
+
+/* ══════════ রোল ম্যানেজমেন্ট (শুধু অ্যাডমিন) ══════════ */
+function RolesTab(){
+  const [roles,setRoles]=useState(null);
+  const [newEmail,setNewEmail]=useState("");
+  const [msg,setMsg]=useState("");
+
+  useEffect(()=>{
+    haisDb.ref("app_roles").on("value", snap=>setRoles(snap.val()||{}));
+    return ()=>haisDb.ref("app_roles").off();
+  },[]);
+
+  const setRoleField = (key, field, value)=>{
+    haisDb.ref("app_roles/"+key+"/"+field).set(value);
+  };
+  const addNew = ()=>{
+    if(!newEmail.trim()||!newEmail.includes("@")){ setMsg("সঠিক ইমেইল লিখুন"); return; }
+    const key = emailKey(newEmail);
+    haisDb.ref("app_roles/"+key).set({
+      email: newEmail.trim().toLowerCase(),
+      canAccessHostel: false, canAccessAcademic: false, isAdmin: false,
+    });
+    setNewEmail(""); setMsg("✅ যোগ করা হয়েছে — নিচে গিয়ে অ্যাক্সেস টিক দিন");
+  };
+
+  return React.createElement("div",null,
+    React.createElement(Card,null,
+      React.createElement("div",{style:{fontWeight:700,fontSize:14,marginBottom:8}},"🔑 রোল ম্যানেজমেন্ট"),
+      React.createElement("div",{style:{display:"flex",gap:8,marginBottom:6}},
+        React.createElement("input",{type:"email",value:newEmail,onChange:e=>setNewEmail(e.target.value),
+          placeholder:"নতুন ইমেইল যোগ করুন...",
+          style:{flex:1,padding:"8px 10px",border:`1px solid ${C.bd}`,borderRadius:8,fontSize:12}}),
+        React.createElement("button",{onClick:addNew,
+          style:{padding:"8px 16px",borderRadius:8,border:"none",background:C.pu,color:"#fff",
+            fontWeight:700,fontSize:12}},"যোগ করুন")),
+      msg && React.createElement("div",{style:{fontSize:11,color:C.pu,fontWeight:600}},msg)),
+    !roles && React.createElement(Card,null,"লোড হচ্ছে..."),
+    roles && Object.entries(roles).map(([key,r])=>{
+      const fields = [["canAccessHostel","🏠 হোস্টেল"],["canAccessAcademic","📚 একাডেমিক"],["isAdmin","👑 অ্যাডমিন"]];
+      const checkboxes = fields.map(([field,label])=>
+        React.createElement("label",{key:field,
+          style:{display:"flex",alignItems:"center",gap:5,fontSize:12,cursor:"pointer"}},
+          React.createElement("input",{type:"checkbox",checked:!!r[field],
+            onChange:e=>setRoleField(key,field,e.target.checked)}),
+          label)
+      );
+      return React.createElement(Card,{key},
+        React.createElement("div",{style:{fontWeight:700,fontSize:13,marginBottom:8}}, r.email),
+        React.createElement("div",{style:{display:"flex",gap:14,flexWrap:"wrap"}}, checkboxes));
+    }));
+}
+
+
+/* ══════════ রুট অ্যাপ ══════════ */
+function App(){
+  const [user,setUser]=useState(undefined); // undefined = লোড হচ্ছে, null = লগইন নেই
+  const [role,setRole]=useState(undefined);
+
+  useEffect(()=>{
+    return auth.onAuthStateChanged(u=>{
+      setUser(u||null);
+      if(!u){ setRole(undefined); return; }
+      const key = emailKey(u.email);
+      haisDb.ref("app_roles/"+key).once("value").then(snap=>{
+        setRole(snap.val()||null);
+      });
+    });
+  },[]);
+
+  if(user===undefined || (user && role===undefined)){
+    return React.createElement("div",{style:{minHeight:"100vh",display:"flex",alignItems:"center",
+      justifyContent:"center",color:C.mu}}, "লোড হচ্ছে...");
+  }
+  if(!user){
+    return React.createElement(LoginScreen,{onLogin:setUser});
+  }
+  if(!role){
+    return React.createElement(NoRoleScreen,{user, onLogout:()=>auth.signOut()});
+  }
+  return React.createElement(Dashboard,{user, role, onLogout:()=>auth.signOut()});
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
+</script>
+</body>
+</html>
